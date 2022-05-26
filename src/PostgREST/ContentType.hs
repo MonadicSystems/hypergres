@@ -13,12 +13,15 @@ import qualified Data.ByteString.Internal as BS (c2w)
 import Network.HTTP.Types.Header (Header, hContentType)
 
 import Protolude
+import Data.List (lookup)
 
 -- | Enumeration of currently supported response content types
 data ContentType
   = CTApplicationJSON
+  | CTSingularHTML (Maybe TemplateName)
   | CTSingularJSON
   | CTTextCSV
+  | CTTextHTML (Maybe TemplateName)
   | CTTextPlain
   | CTTextXML
   | CTOpenAPI
@@ -39,29 +42,47 @@ toHeader ct = (hContentType, toMime ct <> charset)
 
 -- | Convert from ContentType to a ByteString representing the mime type
 toMime :: ContentType -> ByteString
-toMime CTApplicationJSON = "application/json"
-toMime CTTextCSV         = "text/csv"
-toMime CTTextPlain       = "text/plain"
-toMime CTTextXML         = "text/xml"
-toMime CTOpenAPI         = "application/openapi+json"
-toMime CTSingularJSON    = "application/vnd.pgrst.object+json"
-toMime CTUrlEncoded      = "application/x-www-form-urlencoded"
-toMime CTOctetStream     = "application/octet-stream"
-toMime CTAny             = "*/*"
-toMime (CTOther ct)      = ct
+toMime CTApplicationJSON  = "application/json"
+toMime CTTextCSV          = "text/csv"
+toMime (CTTextHTML _)     = "text/html"
+toMime CTTextPlain        = "text/plain"
+toMime CTTextXML          = "text/xml"
+toMime CTOpenAPI          = "application/openapi+json"
+toMime (CTSingularHTML _) = "application/vnd.pgrst.object+html"
+toMime CTSingularJSON     = "application/vnd.pgrst.object+json"
+toMime CTUrlEncoded       = "application/x-www-form-urlencoded"
+toMime CTOctetStream      = "application/octet-stream"
+toMime CTAny              = "*/*"
+toMime (CTOther ct)       = ct
 
 -- | Convert from ByteString to ContentType. Warning: discards MIME parameters
 decodeContentType :: BS.ByteString -> ContentType
 decodeContentType ct =
-  case BS.takeWhile (/= BS.c2w ';') ct of
-    "application/json"                  -> CTApplicationJSON
-    "text/csv"                          -> CTTextCSV
-    "text/plain"                        -> CTTextPlain
-    "text/xml"                          -> CTTextXML
-    "application/openapi+json"          -> CTOpenAPI
-    "application/vnd.pgrst.object+json" -> CTSingularJSON
-    "application/vnd.pgrst.object"      -> CTSingularJSON
-    "application/x-www-form-urlencoded" -> CTUrlEncoded
-    "application/octet-stream"          -> CTOctetStream
-    "*/*"                               -> CTAny
-    ct'                                 -> CTOther ct'
+  let
+    contentType = BS.takeWhile (/= BS.c2w ';') ct
+    mimeParameters =
+      map (\[p, v] -> (p, v))           -- Turn lists into pairs
+      $ filter (\l -> length l == 2)    -- Remove lists that aren't exactly two values long
+      $ map (BS.split $ BS.c2w '=')     -- Split MIME parameters into parameter & value lists
+      $ BS.split (BS.c2w ';')           -- Split up MIME parameters
+      $ BS.dropWhile (/= BS.c2w ';') ct -- Remove content type
+  in
+    case contentType of
+      "application/json"                  -> CTApplicationJSON
+      "text/csv"                          -> CTTextCSV
+      "text/html"                         ->
+        CTTextHTML $ TemplateName <$> lookup "template" mimeParameters
+      "text/plain"                        -> CTTextPlain
+      "text/xml"                          -> CTTextXML
+      "application/openapi+json"          -> CTOpenAPI
+      "application/vnd.pgrst.object+html" ->
+        CTSingularHTML $ TemplateName <$> lookup "template" mimeParameters
+      "application/vnd.pgrst.object+json" -> CTSingularJSON
+      "application/vnd.pgrst.object"      -> CTSingularJSON
+      "application/x-www-form-urlencoded" -> CTUrlEncoded
+      "application/octet-stream"          -> CTOctetStream
+      "*/*"                               -> CTAny
+      ct'                                 -> CTOther ct'
+
+newtype TemplateName = TemplateName { unTemplateName :: BS.ByteString }
+  deriving (Eq, Ord, Show)

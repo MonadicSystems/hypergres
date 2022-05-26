@@ -211,6 +211,13 @@ postgrestResponse conf@AppConfig{..} maybeDbStructure jsonDbS pgVer pool AuthRes
     Middleware.optionalRollback conf apiRequest $
       Middleware.runPgLocals conf authClaims authRole handleReq apiRequest jsonDbS pgVer
 
+  -- Templating HERE
+    --   htmlify
+    --   :: ByteString -- JSON
+    --   -> ByteString -- HTML Template
+    --   -> ByteString -- HTML
+    -- htmlify = undefined
+
 runDbHandler :: SQL.Pool -> SQL.Mode -> Bool -> Bool -> DbHandler a -> Handler IO a
 runDbHandler pool mode authenticated prepared handler = do
   dbResp <-
@@ -224,7 +231,7 @@ runDbHandler pool mode authenticated prepared handler = do
   liftEither resp
 
 handleRequest :: RequestContext -> DbHandler Wai.Response
-handleRequest context@(RequestContext _ _ ApiRequest{..} _) =
+handleRequest context@(RequestContext _ _ ApiRequest{..} _) = do
   case (iAction, iTarget) of
     (ActionRead headersOnly, TargetIdent identifier) ->
       handleRead headersOnly identifier context
@@ -267,7 +274,7 @@ handleRead headersOnly identifier context@RequestContext{..} = do
          else
            countQuery
         )
-        (iAcceptContentType == CTSingularJSON)
+        (isSingular iAcceptContentType)
         (shouldCount iPreferCount)
         (iAcceptContentType == CTTextCSV)
         (iAcceptContentType == CTTextXML)
@@ -457,7 +464,7 @@ handleInvoke invMethod proc context@RequestContext{..} = do
         (QueryBuilder.readRequestToQuery req)
         (QueryBuilder.readRequestToCountQuery req)
         (shouldCount iPreferCount)
-        (iAcceptContentType == CTSingularJSON)
+        (isSingular iAcceptContentType)
         (iAcceptContentType == CTTextCSV)
         (iAcceptContentType == CTTextXML)
         (iPreferParameters == Just MultipleObjects)
@@ -544,7 +551,7 @@ writeQuery mutation identifier@QualifiedIdentifier{..} isInsert pkCols context@R
       Statements.createWriteStatement
         (QueryBuilder.readRequestToQuery readReq)
         (QueryBuilder.mutateRequestToQuery mutateReq)
-        (iAcceptContentType ctxApiRequest == CTSingularJSON)
+        (isSingular $ iAcceptContentType ctxApiRequest)
         isInsert
         (iAcceptContentType ctxApiRequest == CTTextCSV)
         (iPreferRepresentation ctxApiRequest)
@@ -570,7 +577,7 @@ gucResponse gucStatus gucHeaders status headers =
 -- was found.
 failNotSingular :: ContentType -> Int64 -> Wai.Response -> DbHandler Wai.Response
 failNotSingular contentType queryTotal response =
-  if contentType == CTSingularJSON && queryTotal /= 1 then
+  if isSingular contentType && queryTotal /= 1 then
     do
       lift SQL.condemn
       throwError $ Error.singularityError queryTotal
@@ -638,3 +645,8 @@ splitKeyValue kv =
   (k, BS.tail v)
   where
     (k, v) = BS.break (== '=') kv
+
+isSingular :: ContentType -> Bool
+isSingular (CTSingularHTML _) = True
+isSingular CTSingularJSON     = True
+isSingular _                  = False

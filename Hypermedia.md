@@ -79,7 +79,7 @@ Every URL that the user interacts with is an arrow to another state. What is ***
 - The DB
 - The DOM
 
-We can see, at any given point, what actions on the DB the user will take next and what actions they will have next as a result.
+We can see, at any given point, what actions on the DB the user can take next and what actions they will be able to use next.
 
 Maybe TLA+ or something like it could be used.
 
@@ -90,6 +90,6 @@ This could be used for:
 - Making sure that certain states are reachable/unreachable from another state
 - Making sure that certain states are correct
 - Fine grained testing
-- Playback/Rewind debugging. Reverting to that last state.
+- Playback/Rewind debugging. Reverting to the previous state
 
 The first state is the first page that user goes to. The landing page. This would be the first node in your state transition graph.

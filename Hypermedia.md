@@ -91,3 +91,5 @@ This could be used for:
 - Making sure that certain states are correct
 - Fine grained testing
 - Playback/Rewind debugging. Reverting to that last state.
+
+The first state is the first page that user goes to. The landing page. This would be the first node in your state transition graph.

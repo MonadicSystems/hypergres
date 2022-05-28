@@ -34,6 +34,8 @@ Two main editors are the **HTML Template Editor** and the **SQL Editor**. URLs a
 The HTML template editor is where you create HTML templates for tables/views/procedures.
 It should work as a normal templating engine with the addition of URL builders and htmx helpers.
 
+***USING STACHE LIBRARY ON HACKAGE FOR NOW***
+
 URL builders determine whether a URL, usually used for a hx-get/hx-post/etc., maps to a table/view/procedure in the database.
 
 ```html

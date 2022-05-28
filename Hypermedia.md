@@ -89,3 +89,5 @@ This could be used for:
 
 - Making sure that certain states are reachable/unreachable from another state
 - Making sure that certain states are correct
+- Fine grained testing
+- Playback/Rewind debugging. Reverting to that last state.

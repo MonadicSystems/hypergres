@@ -60,4 +60,32 @@ and **help with choosing a template that maps to the result of that URL**.
 
 ### SQL Editor
 
+The SQL Database is the single source of truth. Knowledge of the DB schema is needed at all times. Thankfully, PostgREST has a schema cache.
+This will be used for the URL builder. Based on the schema, we can determine what URLs ***make sense***. URL completion should be a part of the editor.
+General schema information should be a part of the editor.
 
+## General
+
+To check if everything is correct two things need to be done:
+
+- Check that URLs are valid
+- Check that template and data align
+
+## Formal Verification
+
+HATEOAS is a state machine. We can check what states can be reached from any given state. It should create a graph like structure.
+Every URL that the user interacts with is an arrow to another state. What is ***state*** in this case?
+
+- The DB
+- The DOM
+
+We can see, at any given point, what actions on the DB the user will take next and what actions they will have next as a result.
+
+Maybe TLA+ or something like it could be used.
+
+We should be able to give the developer a map of their application showing possible transitions from one state to another.
+
+This could be used for:
+
+- Making sure that certain states are reachable/unreachable from another state
+- Making sure that certain states are correct

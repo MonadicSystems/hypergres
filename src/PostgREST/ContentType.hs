@@ -2,6 +2,7 @@
 
 module PostgREST.ContentType
   ( ContentType(..)
+  , TemplateName(..)
   , toHeader
   , toMime
   , decodeContentType
@@ -9,6 +10,8 @@ module PostgREST.ContentType
 
 import qualified Data.ByteString          as BS
 import qualified Data.ByteString.Internal as BS (c2w)
+
+import qualified Data.Text.Encoding as Text
 
 import Network.HTTP.Types.Header (Header, hContentType)
 
@@ -71,12 +74,12 @@ decodeContentType ct =
       "application/json"                  -> CTApplicationJSON
       "text/csv"                          -> CTTextCSV
       "text/html"                         ->
-        CTTextHTML $ TemplateName <$> lookup "template" mimeParameters
+        CTTextHTML (TemplateName <$> (lookup "template" mimeParameters >>= (eitherToMaybe . Text.decodeUtf8')))
       "text/plain"                        -> CTTextPlain
       "text/xml"                          -> CTTextXML
       "application/openapi+json"          -> CTOpenAPI
       "application/vnd.pgrst.object+html" ->
-        CTSingularHTML $ TemplateName <$> lookup "template" mimeParameters
+        CTSingularHTML (TemplateName <$> (lookup "template" mimeParameters >>= (eitherToMaybe . Text.decodeUtf8')))
       "application/vnd.pgrst.object+json" -> CTSingularJSON
       "application/vnd.pgrst.object"      -> CTSingularJSON
       "application/x-www-form-urlencoded" -> CTUrlEncoded
@@ -84,5 +87,9 @@ decodeContentType ct =
       "*/*"                               -> CTAny
       ct'                                 -> CTOther ct'
 
-newtype TemplateName = TemplateName { unTemplateName :: BS.ByteString }
+eitherToMaybe :: Either l r -> Maybe r
+eitherToMaybe (Right r) = Just r
+eitherToMaybe _ = Nothing
+
+newtype TemplateName = TemplateName { unTemplateName :: Text }
   deriving (Eq, Ord, Show)

@@ -26,10 +26,13 @@ import Network.Wai.Handler.Warp (defaultSettings, setHost, setPort,
                                  setServerName)
 import System.Posix.Types       (FileMode)
 
+import qualified Data.Aeson as Aeson
+import qualified Data.Attoparsec.ByteString      as Atto
 import qualified Data.ByteString.Char8           as BS
 import qualified Data.ByteString.Lazy            as LBS
 import qualified Data.HashMap.Strict             as M
 import qualified Data.Set                        as S
+import qualified Data.Text.Encoding              as Text
 import qualified Hasql.DynamicStatements.Snippet as SQL (Snippet)
 import qualified Hasql.Pool                      as SQL
 import qualified Hasql.Transaction               as SQL
@@ -39,6 +42,7 @@ import qualified Network.HTTP.Types.Status       as HTTP
 import qualified Network.HTTP.Types.URI          as HTTP
 import qualified Network.Wai                     as Wai
 import qualified Network.Wai.Handler.Warp        as Warp
+import qualified Text.Mustache                   as Stache
 
 import qualified PostgREST.Admin                    as Admin
 import qualified PostgREST.AppState                 as AppState
@@ -106,7 +110,7 @@ type SignalHandlerInstaller = AppState -> IO()
 
 type SocketRunner = Warp.Settings -> Wai.Application -> FileMode -> FilePath -> IO()
 
-
+-- Editor TOOL App goes inside the run function. Has Access to AppState.
 run :: SignalHandlerInstaller -> Maybe SocketRunner -> AppState -> IO ()
 run installHandlers maybeRunWithSocket appState = do
   conf@AppConfig{..} <- AppState.getConfig appState
@@ -117,6 +121,7 @@ run installHandlers maybeRunWithSocket appState = do
 
   let app = postgrest configLogLevel appState (connectionWorker appState)
       adminApp = Admin.postgrestAdmin appState conf
+      -- hypermediaApp = Hypermedia.app appState conf
 
   whenJust configAdminServerPort $ \adminPort -> do
     AppState.logWithZTime appState $ "Admin server listening on port " <> show adminPort
@@ -205,18 +210,27 @@ postgrestResponse conf@AppConfig{..} maybeDbStructure jsonDbS pgVer pool AuthRes
     liftEither . mapLeft Error.ApiRequestError $
       ApiRequest.userApiRequest conf dbStructure req body
 
-  let handleReq apiReq = handleRequest $ RequestContext conf dbStructure apiReq pgVer
+  mbHtmlTemplate <-
+    lift $
+      case contentTypeHasTemplate $ iAcceptContentType apiRequest of
+        Nothing -> pure Nothing
+        Just (ContentType.TemplateName tn) -> do
+          htmlTemplate <- Stache.compileMustacheDir (Stache.PName tn) "./templates"
+          pure $ Just htmlTemplate
+
+  let
+    renderHTML respBody =
+      case mbHtmlTemplate of
+        Nothing -> respBody
+        Just htmlTemplate ->
+          case Atto.maybeResult $ Atto.parse Aeson.json' respBody of
+            Nothing    -> respBody
+            Just value -> Text.encodeUtf8 $ toStrict $ Stache.renderMustache htmlTemplate value
+    handleReq apiReq = handleRequest renderHTML $ RequestContext conf dbStructure apiReq pgVer
 
   runDbHandler pool (txMode apiRequest) (Just authRole /= configDbAnonRole) configDbPreparedStatements .
     Middleware.optionalRollback conf apiRequest $
       Middleware.runPgLocals conf authClaims authRole handleReq apiRequest jsonDbS pgVer
-
-  -- Templating HERE
-    --   htmlify
-    --   :: ByteString -- JSON
-    --   -> ByteString -- HTML Template
-    --   -> ByteString -- HTML
-    -- htmlify = undefined
 
 runDbHandler :: SQL.Pool -> SQL.Mode -> Bool -> Bool -> DbHandler a -> Handler IO a
 runDbHandler pool mode authenticated prepared handler = do
@@ -230,32 +244,32 @@ runDbHandler pool mode authenticated prepared handler = do
 
   liftEither resp
 
-handleRequest :: RequestContext -> DbHandler Wai.Response
-handleRequest context@(RequestContext _ _ ApiRequest{..} _) = do
+handleRequest :: (ByteString -> ByteString) -> RequestContext -> DbHandler Wai.Response
+handleRequest renderHTML context@(RequestContext _ _ ApiRequest{..} _) = do
   case (iAction, iTarget) of
     (ActionRead headersOnly, TargetIdent identifier) ->
-      handleRead headersOnly identifier context
+      handleRead renderHTML headersOnly identifier context
     (ActionMutate MutationCreate, TargetIdent identifier) ->
-      handleCreate identifier context
+      handleCreate renderHTML identifier context
     (ActionMutate MutationUpdate, TargetIdent identifier) ->
-      handleUpdate identifier context
+      handleUpdate renderHTML identifier context
     (ActionMutate MutationSingleUpsert, TargetIdent identifier) ->
-      handleSingleUpsert identifier context
+      handleSingleUpsert renderHTML identifier context
     (ActionMutate MutationDelete, TargetIdent identifier) ->
-      handleDelete identifier context
+      handleDelete renderHTML identifier context
     (ActionInfo, TargetIdent identifier) ->
       handleInfo identifier context
     (ActionInvoke invMethod, TargetProc proc _) ->
-      handleInvoke invMethod proc context
+      handleInvoke renderHTML invMethod proc context
     (ActionInspect headersOnly, TargetDefaultSpec tSchema) ->
-      handleOpenApi headersOnly tSchema context
+      handleOpenApi renderHTML headersOnly tSchema context
     (ActionUnknown verb, _) ->
       throwError $ Error.UnsupportedVerb verb
     _ ->
       throwError Error.NotFound
 
-handleRead :: Bool -> QualifiedIdentifier -> RequestContext -> DbHandler Wai.Response
-handleRead headersOnly identifier context@RequestContext{..} = do
+handleRead :: (ByteString -> ByteString) -> Bool -> QualifiedIdentifier -> RequestContext -> DbHandler Wai.Response
+handleRead renderHTML headersOnly identifier context@RequestContext{..} = do
   req <- readRequest identifier context
   bField <- binaryField context req
 
@@ -297,7 +311,7 @@ handleRead headersOnly identifier context@RequestContext{..} = do
       ++ contentTypeHeaders context
 
   failNotSingular iAcceptContentType queryTotal . response status headers $
-    if headersOnly then mempty else LBS.fromStrict body
+    if headersOnly then mempty else LBS.fromStrict $ renderHTML body
 
 readTotal :: AppConfig -> ApiRequest -> Maybe Int64 -> SQL.Snippet -> DbHandler (Maybe Int64)
 readTotal AppConfig{..} ApiRequest{..} tableTotal countQuery =
@@ -316,8 +330,8 @@ readTotal AppConfig{..} ApiRequest{..} tableTotal countQuery =
       lift . SQL.statement mempty . Statements.createExplainStatement countQuery $
         configDbPreparedStatements
 
-handleCreate :: QualifiedIdentifier -> RequestContext -> DbHandler Wai.Response
-handleCreate identifier@QualifiedIdentifier{..} context@RequestContext{..} = do
+handleCreate :: (ByteString -> ByteString) -> QualifiedIdentifier -> RequestContext -> DbHandler Wai.Response
+handleCreate renderHTML identifier@QualifiedIdentifier{..} context@RequestContext{..} = do
   let
     ApiRequest{..} = ctxApiRequest
     pkCols = if iPreferRepresentation /= None || isJust iPreferResolution
@@ -349,12 +363,12 @@ handleCreate identifier@QualifiedIdentifier{..} context@RequestContext{..} = do
 
   failNotSingular iAcceptContentType resQueryTotal $
     if iPreferRepresentation == Full then
-      response HTTP.status201 (headers ++ contentTypeHeaders context) (LBS.fromStrict resBody)
+      response HTTP.status201 (headers ++ contentTypeHeaders context) (LBS.fromStrict $ renderHTML resBody)
     else
       response HTTP.status201 headers mempty
 
-handleUpdate :: QualifiedIdentifier -> RequestContext -> DbHandler Wai.Response
-handleUpdate identifier context@(RequestContext _ _ ApiRequest{..} _) = do
+handleUpdate :: (ByteString -> ByteString) -> QualifiedIdentifier -> RequestContext -> DbHandler Wai.Response
+handleUpdate renderHTML identifier context@(RequestContext _ _ ApiRequest{..} _) = do
   WriteQueryResult{..} <- writeQuery MutationUpdate identifier False mempty context
 
   let
@@ -372,12 +386,12 @@ handleUpdate identifier context@(RequestContext _ _ ApiRequest{..} _) = do
   failChangesOffLimits (RangeQuery.rangeLimit iTopLevelRange) resQueryTotal =<<
     failNotSingular iAcceptContentType resQueryTotal (
       if fullRepr then
-        response status (contentTypeHeaders context ++ [contentRangeHeader]) (LBS.fromStrict resBody)
+        response status (contentTypeHeaders context ++ [contentRangeHeader]) (LBS.fromStrict $ renderHTML resBody)
       else
         response status [contentRangeHeader] mempty)
 
-handleSingleUpsert :: QualifiedIdentifier -> RequestContext-> DbHandler Wai.Response
-handleSingleUpsert identifier context@(RequestContext _ ctxDbStructure ApiRequest{..} _) = do
+handleSingleUpsert :: (ByteString -> ByteString) -> QualifiedIdentifier -> RequestContext-> DbHandler Wai.Response
+handleSingleUpsert renderHTML identifier context@(RequestContext _ ctxDbStructure ApiRequest{..} _) = do
   let pkCols = maybe mempty tablePKCols $ M.lookup identifier $ dbTables ctxDbStructure
 
   WriteQueryResult{..} <- writeQuery MutationSingleUpsert identifier False pkCols context
@@ -395,12 +409,12 @@ handleSingleUpsert identifier context@(RequestContext _ ctxDbStructure ApiReques
 
   return $
     if iPreferRepresentation == Full then
-      response HTTP.status200 (contentTypeHeaders context) (LBS.fromStrict resBody)
+      response HTTP.status200 (contentTypeHeaders context) (LBS.fromStrict $ renderHTML resBody)
     else
       response HTTP.status204 [] mempty
 
-handleDelete :: QualifiedIdentifier -> RequestContext -> DbHandler Wai.Response
-handleDelete identifier context@(RequestContext _ _ ApiRequest{..} _) = do
+handleDelete :: (ByteString -> ByteString) -> QualifiedIdentifier -> RequestContext -> DbHandler Wai.Response
+handleDelete renderHTML identifier context@(RequestContext _ _ ApiRequest{..} _) = do
   WriteQueryResult{..} <- writeQuery MutationDelete identifier False mempty context
 
   let
@@ -414,7 +428,7 @@ handleDelete identifier context@(RequestContext _ _ ApiRequest{..} _) = do
       if iPreferRepresentation == Full then
         response HTTP.status200
           (contentTypeHeaders context ++ [contentRangeHeader])
-          (LBS.fromStrict resBody)
+          (LBS.fromStrict $ renderHTML resBody)
       else
         response HTTP.status204 [contentRangeHeader] mempty)
 
@@ -440,8 +454,8 @@ handleInfo identifier RequestContext{..} =
     hasPK =
       not $ null $ maybe mempty tablePKCols tbl
 
-handleInvoke :: InvokeMethod -> ProcDescription -> RequestContext -> DbHandler Wai.Response
-handleInvoke invMethod proc context@RequestContext{..} = do
+handleInvoke :: (ByteString -> ByteString) -> InvokeMethod -> ProcDescription -> RequestContext -> DbHandler Wai.Response
+handleInvoke renderHTML invMethod proc context@RequestContext{..} = do
   let
     ApiRequest{..} = ctxApiRequest
 
@@ -483,10 +497,10 @@ handleInvoke invMethod proc context@RequestContext{..} = do
     else
       response status
         (contentTypeHeaders context ++ [contentRange])
-        (if invMethod == InvHead then mempty else LBS.fromStrict body)
+        (if invMethod == InvHead then mempty else LBS.fromStrict $ renderHTML body)
 
-handleOpenApi :: Bool -> Schema -> RequestContext -> DbHandler Wai.Response
-handleOpenApi headersOnly tSchema (RequestContext conf@AppConfig{..} dbStructure apiRequest ctxPgVersion) = do
+handleOpenApi :: (ByteString -> ByteString) -> Bool -> Schema -> RequestContext -> DbHandler Wai.Response
+handleOpenApi renderHTML headersOnly tSchema (RequestContext conf@AppConfig{..} dbStructure apiRequest ctxPgVersion) = do
   body <-
     lift $ case configOpenApiMode of
       OAFollowPriv ->
@@ -505,7 +519,7 @@ handleOpenApi headersOnly tSchema (RequestContext conf@AppConfig{..} dbStructure
   return $
     Wai.responseLBS HTTP.status200
       (ContentType.toHeader CTOpenAPI : maybeToList (profileHeader apiRequest))
-      (if headersOnly then mempty else body)
+      (if headersOnly then mempty else LBS.fromStrict $ renderHTML $ LBS.toStrict body)
 
 txMode :: ApiRequest -> SQL.Mode
 txMode ApiRequest{..} =
@@ -650,3 +664,10 @@ isSingular :: ContentType -> Bool
 isSingular (CTSingularHTML _) = True
 isSingular CTSingularJSON     = True
 isSingular _                  = False
+
+contentTypeHasTemplate :: ContentType -> Maybe ContentType.TemplateName
+contentTypeHasTemplate (CTTextHTML mbTemplateName) =
+  mbTemplateName
+contentTypeHasTemplate (CTSingularHTML mbTemplateName) =
+  mbTemplateName
+contentTypeHasTemplate _ = Nothing

@@ -53,6 +53,7 @@ library
                       PostgREST.DbStructure.Table
                       PostgREST.Error
                       PostgREST.GucHeader
+                      PostgREST.Hypermedia
                       PostgREST.Logger
                       PostgREST.Middleware
                       PostgREST.OpenAPI
@@ -73,6 +74,7 @@ library
                     , Ranged-sets               >= 0.3 && < 0.5
                     , aeson                     >= 1.4.7 && < 1.6
                     , auto-update               >= 0.1.4 && < 0.2
+                    , attoparsec
                     , base64-bytestring         >= 1 && < 1.3
                     , bytestring                >= 0.10.8 && < 0.11
                     , case-insensitive          >= 1.2 && < 1.3
@@ -104,6 +106,7 @@ library
                     , regex-tdfa                >= 1.2.2 && < 1.4
                     , retry                     >= 0.7.4 && < 0.10
                     , scientific                >= 0.3.4 && < 0.4
+                    , stache
                     , swagger2                  >= 2.4 && < 2.7
                     , text                      >= 1.2.2 && < 1.3
                     , time                      >= 1.6 && < 1.11

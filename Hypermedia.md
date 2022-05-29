@@ -56,6 +56,40 @@ and **help with choosing a template that maps to the result of that URL**.
   The return type of queries will need to be known ahead of time, as well as the names being used in the template.
   Column names should map to field names used in the template (except for scalars or procedure outputs).
   
+***USING STACHE LIBRARY ON HACKAGE FOR NOW***
+
 ### SQL Editor
 
+The SQL Database is the single source of truth. Knowledge of the DB schema is needed at all times. Thankfully, PostgREST has a schema cache.
+This will be used for the URL builder. Based on the schema, we can determine what URLs ***make sense***. URL completion should be a part of the editor.
+General schema information should be a part of the editor.
 
+## General
+
+To check if everything is correct two things need to be done:
+
+- Check that URLs are valid
+- Check that template and data align
+
+## Formal Verification
+
+HATEOAS is a state machine. We can check what states can be reached from any given state. It should create a graph like structure.
+Every URL that the user interacts with is an arrow to another state. What is ***state*** in this case?
+
+- The DB
+- The DOM
+
+We can see, at any given point, what actions on the DB the user can take next and what actions they will be able to use next.
+
+Maybe TLA+ or something like it could be used.
+
+We should be able to give the developer a map of their application showing possible transitions from one state to another.
+
+This could be used for:
+
+- Making sure that certain states are reachable/unreachable from another state
+- Making sure that certain states are correct
+- Fine grained testing
+- Playback/Rewind debugging. Reverting to the previous state
+
+The first state is the first page that user goes to. The landing page. This would be the first node in your state transition graph.

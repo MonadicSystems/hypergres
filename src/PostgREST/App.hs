@@ -94,6 +94,8 @@ import qualified PostgREST.ContentType      as ContentType
 import qualified PostgREST.DbStructure.Proc as Proc
 
 import Protolude hiding (Handler)
+import System.Directory (createDirectoryIfMissing)
+import qualified PostgREST.Hypermedia as Hypermedia
 
 data RequestContext = RequestContext
   { ctxConfig      :: AppConfig
@@ -116,16 +118,20 @@ run installHandlers maybeRunWithSocket appState = do
   conf@AppConfig{..} <- AppState.getConfig appState
   connectionWorker appState -- Loads the initial DbStructure
   installHandlers appState
+  createTemplatesDir
   -- reload schema cache + config on NOTIFY
   when configDbChannelEnabled $ listener appState
 
   let app = postgrest configLogLevel appState (connectionWorker appState)
       adminApp = Admin.postgrestAdmin appState conf
-      -- hypermediaApp = Hypermedia.app appState conf
+      hypermediaApp = Hypermedia.app appState conf
 
   whenJust configAdminServerPort $ \adminPort -> do
     AppState.logWithZTime appState $ "Admin server listening on port " <> show adminPort
     void . forkIO $ Warp.runSettings (serverSettings conf & setPort adminPort) adminApp
+
+  AppState.logWithZTime appState $ "PostgREST+ server listening on port " <> show (7777 :: Int)
+  void . forkIO $ Warp.runSettings (serverSettings conf & setPort 7777) hypermediaApp
 
   case configServerUnixSocket of
     Just socket ->
@@ -141,6 +147,9 @@ run installHandlers maybeRunWithSocket appState = do
         AppState.logWithZTime appState $ "Listening on port " <> show configServerPort
         Warp.runSettings (serverSettings conf) app
   where
+    createTemplatesDir :: IO ()
+    createTemplatesDir = createDirectoryIfMissing True "./templates"
+
     whenJust :: Applicative m => Maybe a -> (a -> m ()) -> m ()
     whenJust mg f = maybe (pure ()) f mg
 

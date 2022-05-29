@@ -46,6 +46,17 @@ packages:
       sha256: 99ff839445ba2c9e29a294b45904e3f4575336c7d2b4504ce310d611661c761d
   original:
     hackage: warp-3.3.19@sha256:c6a47029537d42844386170d732cdfe6d85b2f4279bbaefdd9b50caff6faeebb,10910
+- completed:
+    name: okapi
+    version: 0.1.0.0
+    git: https://github.com/MonadicSystems/okapi.git
+    pantry-tree:
+      size: 2594
+      sha256: 5c688f65fd3e9df3bc8d1a8d6ec8d905525ab46d3433e49d5ad55df578df11a0
+    commit: 2933bdf03b94bdddfae9ce9c1945e50205011907
+  original:
+    git: https://github.com/MonadicSystems/okapi.git
+    commit: 2933bdf03b94bdddfae9ce9c1945e50205011907
 snapshots:
 - completed:
     size: 586069

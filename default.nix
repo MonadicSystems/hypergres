@@ -57,9 +57,54 @@ let
   patches =
     pkgs.callPackage nix/patches { };
 
+  # FOR BUILDING OKAPI START #
+
+  okapiPkgs = pkgs.haskell.packages."${compiler}".override {
+    overrides = self: super: rec {
+      # Can add/override packages here
+      text =
+        self.callCabal2nix "text" (builtins.fetchTarball {
+          url = "https://hackage.haskell.org/package/text-1.2.5.0/text-1.2.5.0.tar.gz";
+          # sha256 = "...";
+        }) {};
+      bytestring =
+        self.callCabal2nix "bytestring" (builtins.fetchTarball {
+          url = "https://hackage.haskell.org/package/bytestring-0.10.12.1/bytestring-0.10.12.1.tar.gz";
+          # sha256 = "...";
+        }) {};
+      http-api-data =
+        self.callCabal2nix "http-api-data" (builtins.fetchTarball {
+          url = "https://hackage.haskell.org/package/http-api-data-0.4.3/http-api-data-0.4.3.tar.gz";
+          # sha256 = "...";
+        }) {};
+      lucid =
+        self.callCabal2nix "lucid" (builtins.fetchTarball {
+          url = "https://hackage.haskell.org/package/lucid-2.11.0/lucid-2.11.0.tar.gz";
+          # sha256 = "...";
+        }) {};
+      unagi-chan =
+        pkgs.haskell.lib.dontCheck (self.callCabal2nix "unagi-chan" (builtins.fetchTarball {
+          url = "https://hackage.haskell.org/package/unagi-chan-0.4.1.4/unagi-chan-0.4.1.4.tar.gz";
+          # sha256 = "...";
+        }) {});
+      warp =
+        pkgs.haskell.lib.dontCheck (self.callCabal2nix "warp" (builtins.fetchTarball {
+          url = "https://hackage.haskell.org/package/warp-3.3.20/warp-3.3.20.tar.gz";
+          # sha256 = "...";
+        }) {});
+    };
+  };
+
+  okapi =
+    okapiPkgs.callCabal2nix "okapi" (builtins.fetchTarball {
+      url = "https://hackage.haskell.org/package/okapi-0.1.0.2/okapi-0.1.0.2.tar.gz";
+      # sha256 = "...";
+    }) {};
+  # FOR BUILDING OKAPI END #
+
   # Dynamic derivation for PostgREST
   postgrest =
-    pkgs.haskell.packages."${compiler}".callCabal2nix name src { };
+    pkgs.haskell.packages."${compiler}".callCabal2nix name src { inherit okapi; };
 
   # Function that derives a fully static Haskell package based on
   # nh2/static-haskell-nix

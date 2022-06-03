@@ -66,6 +66,7 @@ import qualified PostgREST.Request.Preferences as Preferences
 import qualified PostgREST.Request.QueryParams as QueryParams
 
 import Protolude
+import qualified Debug.Trace
 
 
 type RequestBody = LBS.ByteString
@@ -351,10 +352,27 @@ apiRequest conf@AppConfig{..} dbStructure req reqBody queryparams@QueryParams{..
 -}
 mutuallyAgreeable :: [ContentType] -> [ContentType] -> Maybe ContentType
 mutuallyAgreeable sProduces cAccepts =
-  let exact = listToMaybe $ L.intersect cAccepts sProduces in
-  if isNothing exact && CTAny `elem` cAccepts
-     then listToMaybe sProduces
-     else exact
+  Debug.Trace.trace
+    (show htmlContentType)
+    answer
+  where
+    exact = listToMaybe $ L.intersect cAccepts sProduces
+    -- HACKY --
+    htmlContentType = find
+        (
+          \case
+            (CTSingularHTML _) -> True
+            (CTTextHTML _) -> True
+            _ -> False
+        )
+        cAccepts
+    answer =
+      case htmlContentType of
+        Nothing ->
+          if isNothing exact && CTAny `elem` cAccepts
+            then listToMaybe sProduces
+            else exact
+        Just htmlCt -> Just htmlCt
 
 type CsvData = V.Vector (M.HashMap Text LBS.ByteString)
 

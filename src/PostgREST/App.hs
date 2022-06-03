@@ -94,8 +94,9 @@ import qualified PostgREST.ContentType      as ContentType
 import qualified PostgREST.DbStructure.Proc as Proc
 
 import Protolude hiding (Handler)
-import System.Directory (createDirectoryIfMissing)
+import System.Directory (createDirectoryIfMissing, makeRelativeToCurrentDirectory)
 import qualified PostgREST.Hypermedia as Hypermedia
+import qualified Debug.Trace
 
 data RequestContext = RequestContext
   { ctxConfig      :: AppConfig
@@ -148,7 +149,7 @@ run installHandlers maybeRunWithSocket appState = do
         Warp.runSettings (serverSettings conf) app
   where
     createTemplatesDir :: IO ()
-    createTemplatesDir = createDirectoryIfMissing True "./templates"
+    createTemplatesDir = createDirectoryIfMissing True "templates"
 
     whenJust :: Applicative m => Maybe a -> (a -> m ()) -> m ()
     whenJust mg f = maybe (pure ()) f mg
@@ -224,8 +225,9 @@ postgrestResponse conf@AppConfig{..} maybeDbStructure jsonDbS pgVer pool AuthRes
       case contentTypeHasTemplate $ iAcceptContentType apiRequest of
         Nothing -> pure Nothing
         Just (ContentType.TemplateName tn) -> do
-          htmlTemplate <- Stache.compileMustacheDir (Stache.PName tn) "./templates"
-          pure $ Just htmlTemplate
+          templateDir <- makeRelativeToCurrentDirectory "templates/"
+          htmlTemplate <- Stache.compileMustacheDir (Stache.PName tn) templateDir
+          pure $ Just (Debug.Trace.trace ("The template: " <> show htmlTemplate) htmlTemplate)
 
   let
     renderHTML respBody =
@@ -234,7 +236,10 @@ postgrestResponse conf@AppConfig{..} maybeDbStructure jsonDbS pgVer pool AuthRes
         Just htmlTemplate ->
           case Atto.maybeResult $ Atto.parse Aeson.json' respBody of
             Nothing    -> respBody
-            Just value -> Text.encodeUtf8 $ toStrict $ Stache.renderMustache htmlTemplate value
+            Just value ->
+              Debug.Trace.trace
+                ("Template result: " <> (show $ Stache.renderMustacheW htmlTemplate value))
+                (Text.encodeUtf8 $ toStrict $ Stache.renderMustache htmlTemplate value)
     handleReq apiReq = handleRequest renderHTML $ RequestContext conf dbStructure apiReq pgVer
 
   runDbHandler pool (txMode apiRequest) (Just authRole /= configDbAnonRole) configDbPreparedStatements .

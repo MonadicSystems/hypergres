@@ -32,7 +32,7 @@ data ContentType
   | CTOctetStream
   | CTAny
   | CTOther ByteString
-  deriving (Eq)
+  deriving (Eq, Show {- May remove. Added for debugging-})
 
 -- | Convert from ContentType to a full HTTP Header
 toHeader :: ContentType -> Header

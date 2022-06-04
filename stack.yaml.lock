@@ -53,6 +53,13 @@ packages:
       sha256: 12301f8806b7b9a7fdafe008ce223d7fdd15c1cc6cab8e77d817552eb9f52087
   original:
     hackage: okapi-0.1.0.2@sha256:b189d31f027deb7b1dd56910640c4abd700a88857ea4da51d234890aea189b95,2610
+- completed:
+    hackage: lucid-htmx-0.1.0.6@sha256:83d9eed5ff74778a2dfc3f320a66b08592a2880abca28d75747a0513a39bd871,1528
+    pantry-tree:
+      size: 427
+      sha256: e7e0ebb5432ec6dd278e1ac594a94aa3311e378c683275274874dfee2e12dfe3
+  original:
+    hackage: lucid-htmx-0.1.0.6@sha256:83d9eed5ff74778a2dfc3f320a66b08592a2880abca28d75747a0513a39bd871,1528
 snapshots:
 - completed:
     size: 586069

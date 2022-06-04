@@ -1,5 +1,5 @@
 name:               postgrest
-version:            9.0.0.20220516
+version:            9.0.0.20220531
 synopsis:           REST API for any Postgres database
 description:        Reads the schema of a PostgreSQL database and creates RESTful routes
                     for tables, views, and functions, supporting all HTTP verbs that security
@@ -153,7 +153,7 @@ executable postgrest
                     , containers          >= 0.5.7 && < 0.7
                     , postgrest
                     , protolude           >= 0.3 && < 0.4
-  ghc-options:        -threaded -rtsopts "-with-rtsopts=-N -I2"
+  ghc-options:        -threaded -rtsopts "-with-rtsopts=-N -I0 -qg"
                       -O2 -Werror -Wall -fwarn-identities
                       -fno-spec-constr -optP-Wno-nonportable-include-path
 

@@ -26,7 +26,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
  - #2236, Support POSIX regular expression operators for row filtering - @enote-kane
  - #2202, Allow returning XML from RPCs - @fjf2002
  - #2269, Allow `limit=0` in the request query to return an empty array - @gautam1168, @laurenceisla
- - #2268, Allow returning XML from single-column queries #2268 - @fjf2002
+ - #2268, Allow returning XML from single-column queries - @fjf2002
+ - #2300, RPC POST for function w/single unnamed XML param #2300 - @fjf2002
 
 ### Fixed
 
@@ -56,6 +57,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
  - #2277, #2238, #1643, Prevent views from breaking one-to-many/many-to-one embeds when using column or FK as target - @steve-chavez
     + When using a column or FK as target for embedding(`/tbl?select=*,col-or-fk(*)`), only tables are now detected and views are not.
     + You can still use a column or an inferred FK on a view to embed a table(`/view?select=*,col-or-fk(*)`)
+ - #2294, Disable parallel GC for better performance on higher core CPUs - @steve-chavez
+ - #1076, Fix using CPU while idle - @steve-chavez
 
 ### Changed
 

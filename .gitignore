@@ -24,3 +24,4 @@ coverage
 loadtest
 .history
 hypermedia/node_modules
+hypermedia/editor.bundle.js

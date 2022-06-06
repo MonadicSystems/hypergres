@@ -15,7 +15,7 @@ import Protolude
 import qualified Network.Wai as Wai
 -- import qualified Network.HTTP.Types as HTTP
 import qualified Okapi
-import System.Directory (listDirectory, makeRelativeToCurrentDirectory) -- , doesFileExist), {- getCurrentDirectory, -} makeRelativeToCurrentDirectory)
+import System.Directory (listDirectory, makeRelativeToCurrentDirectory, removeFile) -- , doesFileExist), {- getCurrentDirectory, -} makeRelativeToCurrentDirectory)
 import qualified Data.Text as T
 import Data.Aeson (FromJSON)
 import qualified Text.InterpolatedString.Perl6 as Perl
@@ -30,6 +30,7 @@ app _ _ = Okapi.makeOkapiApp identity hypermedia
 
 hypermedia :: Okapi Okapi.Result
 hypermedia =
+  editor <|>
   home <|>
   dashboard <|> -- For checking health of hypermedia tool
   templates <|> -- For managing HTML templates
@@ -37,7 +38,15 @@ hypermedia =
   createTemplate <|>
   create <|>
   editTemplate <|>
-  save
+  save <|>
+  deleteTemplate
+
+editor :: Okapi Okapi.Result
+editor = do
+  Okapi.get
+  Okapi.seg "editor.js"
+  scriptPath <- liftIO $ makeRelativeToCurrentDirectory "postgrest/hypermedia/editor.bundle.js"
+  Okapi.okFile [("Content-Type", "application/json")] scriptPath
 
 home :: Okapi Okapi.Result
 home = do
@@ -52,9 +61,10 @@ home = do
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <meta http-equiv="X-UA-Compatible" content="ie=edge">
             <title>Hypermedia Tool</title>
-            <script src="https://unpkg.com/htmx.org@1.7.0" integrity="sha384-EzBXYPt0/T6gxNp0nuPtLkmRpmDBbjg6WmCUZRLXBBwYYmwAUxzlSGej0ARHX0Bo" crossorigin="anonymous"></script>
-            <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
-            <script src="https://unpkg.com/hyperscript.org@0.9.5"></script>
+            <script defer src="/editor.js"></script>
+            <script defer src="https://unpkg.com/htmx.org@1.7.0" integrity="sha384-EzBXYPt0/T6gxNp0nuPtLkmRpmDBbjg6WmCUZRLXBBwYYmwAUxzlSGej0ARHX0Bo" crossorigin="anonymous"></script>
+            <script defer src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
+            <script defer src="https://unpkg.com/hyperscript.org@0.9.5"></script>
             <script src="https://cdn.tailwindcss.com"></script>
           </head>
           <body>
@@ -343,10 +353,18 @@ templateScreen = do
         map
           (\tn ->
             [Perl.qc|
-              <li>
-                <button hx-get="/templates/{tn}" hx-target="#screen">
-                  {tn}
-                </button>
+              <li id="{tn}-item">
+                <div class="px-4 py-4 sm:px-6 flex items-center justify-between">
+                  <p class="text-lg font-medium text-indigo-600 truncate">{tn}</p>
+                  <div class="flex items-center">
+                    <button hx-get="/templates/{tn}" hx-target="#screen" type="button" class="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                      Edit
+                    </button>
+                    <button hx-delete="/templates/{tn}" hx-target="#{tn}-item" hx-swap="outerHTML" type="button" class="ml-4 inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                      Delete
+                    </button>
+                  </div>
+                </div>
               </li>
             |]
           )
@@ -360,14 +378,19 @@ templateScreen = do
           <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
             <!-- Replace with your content -->
             <div class="py-4">
-              <div class="border-4 border-dashed border-gray-200 rounded-lg h-96">
-                <ul>
+              <!-- This example requires Tailwind CSS v2.0+ -->
+              <div class="bg-white shadow overflow-hidden sm:rounded-md">
+                <ul role="list" class="divide-y divide-gray-200">
                   {templateList}
                   <li>
-                    <button hx-get="/templates/create" hx-target="#screen">
-                      Add New
-                    </button>
-                  <li>
+                    <div class="px-4 py-4 sm:px-6 flex items-center justify-between">
+                      <button hx-get="/templates/create" hx-target="#screen" type="button" class="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                        Create New Template
+                      </button>
+                      <div>
+                      </div>
+                    </div>
+                  </li>
                 </ul>
               </div>
             </div>
@@ -377,6 +400,10 @@ templateScreen = do
       |]
     in
       Okapi.okHTML [] screen
+
+-- <button hx-get="/templates/create" hx-target="#screen">
+--   Add New
+-- </button>
 
 database :: Okapi Okapi.Result
 database = do
@@ -393,7 +420,7 @@ database = do
             <!-- Replace with your content -->
             <div class="py-4">
               <div class="border-4 border-dashed border-gray-200 rounded-lg h-96">
-                <h1 class="text-xl text-red-500">SQL Editor HERE</h1>
+                <div id="editor"></div>
               </div>
             </div>
             <!-- /End replace -->
@@ -438,6 +465,16 @@ editTemplate = do
         </div>
       |]
     in Okapi.okHTML [] screen
+
+deleteTemplate :: Okapi Okapi.Result
+deleteTemplate = do
+  Okapi.delete
+  Okapi.seg "templates"
+  templateName <- Okapi.segParam
+  liftIO $ do
+    templatePath <- makeRelativeToCurrentDirectory ("templates/" <> templateName <> ".mustache")
+    removeFile templatePath
+  Okapi.okHTML [] ""
 
 createTemplate :: Okapi Okapi.Result
 createTemplate = do

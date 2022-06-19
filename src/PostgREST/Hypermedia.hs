@@ -1,27 +1,30 @@
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 
 module PostgREST.Hypermedia where
 
+-- import qualified Network.HTTP.Types as HTTP
+
+-- , doesFileExist), {- getCurrentDirectory, -} makeRelativeToCurrentDirectory)
+
+import Data.Aeson (FromJSON)
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Text as T
+import qualified Network.Wai as Wai
+import qualified Okapi
 import PostgREST.AppState
 import PostgREST.Config
 import Protolude
-import qualified Network.Wai as Wai
--- import qualified Network.HTTP.Types as HTTP
-import qualified Okapi
-import System.Directory (listDirectory, makeRelativeToCurrentDirectory, removeFile) -- , doesFileExist), {- getCurrentDirectory, -} makeRelativeToCurrentDirectory)
-import qualified Data.Text as T
-import Data.Aeson (FromJSON)
-import qualified Text.InterpolatedString.Perl6 as Perl
-import qualified Data.ByteString.Lazy as LBS
+import System.Directory (listDirectory, makeRelativeToCurrentDirectory, removeFile)
 -- import qualified System.Posix.IO as Posix
 import qualified System.Posix as Posix
+import qualified Text.InterpolatedString.Perl6 as Perl
 
 type Okapi a = Okapi.OkapiT IO a
 
@@ -30,16 +33,16 @@ app _ _ = Okapi.makeOkapiApp identity hypermedia
 
 hypermedia :: Okapi Okapi.Result
 hypermedia =
-  editor <|>
-  home <|>
-  dashboard <|> -- For checking health of hypermedia tool
-  templates <|> -- For managing HTML templates
-  database <|> -- For managing database
-  createTemplate <|>
-  create <|>
-  editTemplate <|>
-  save <|>
-  deleteTemplate
+  editor
+    <|> home
+    <|> dashboard
+    <|> templates -- For checking health of hypermedia tool
+    <|> database -- For managing HTML templates
+    <|> createTemplate -- For managing database
+    <|> create
+    <|> editTemplate
+    <|> save
+    <|> deleteTemplate
 
 editor :: Okapi Okapi.Result
 editor = do
@@ -51,16 +54,15 @@ editor = do
 home :: Okapi Okapi.Result
 home = do
   Okapi.get
-  let
-    homePage :: LBS.ByteString =
-      [Perl.qq|
+  let homePage :: LBS.ByteString =
+        [Perl.qq|
         <!DOCTYPE html>
         <html lang="en">
           <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <meta http-equiv="X-UA-Compatible" content="ie=edge">
-            <title>Hypermedia Tool</title>
+            <title>Hypergres</title>
             <script defer src="/editor.js"></script>
             <script defer src="https://unpkg.com/htmx.org@1.7.0" integrity="sha384-EzBXYPt0/T6gxNp0nuPtLkmRpmDBbjg6WmCUZRLXBBwYYmwAUxzlSGej0ARHX0Bo" crossorigin="anonymous"></script>
             <script defer src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
@@ -210,7 +212,7 @@ home = do
                 <div class="flex-1 flex flex-col min-h-0 bg-gray-800">
                   <div class="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
                     <div class="flex items-center flex-shrink-0 px-4">
-                      <img class="h-8 w-auto" src="https://tailwindui.com/img/logos/workflow-logo-indigo-500-mark-white-text.svg" alt="Workflow">
+                      <h1 class="text-white text-2xl font-semibold tracking-wide">Hypergres<h1>
                     </div>
                     <nav id="sidenav" class="mt-5 flex-1 px-2 space-y-1">
                       <!-- Current: "bg-gray-900 text-white", Default: "text-gray-300 hover:bg-gray-700 hover:text-white" -->
@@ -284,22 +286,7 @@ home = do
                   </button>
                 </div>
                 <main id="screen" class="flex-1">
-                  <div class="py-6">
-                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                      <h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>
-                    </div>
-                    <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-                      <!-- Replace with your content -->
-                      <div class="py-4">
-                        <div class="border-4 border-dashed border-gray-200 rounded-lg h-96">
-                          <h1 class="text-green-400 text-xl">
-                            Hypermedia Tool Online
-                          </h1>
-                        </div>
-                      </div>
-                      <!-- /End replace -->
-                    </div>
-                  </div>
+                  {homeScreen}
                 </main>
               </div>
             </div>
@@ -310,32 +297,30 @@ home = do
     []
     homePage
 
+homeScreen :: LBS.ByteString
+homeScreen =
+  [Perl.q|
+    <div class="py-6">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>
+      </div>
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+        <!-- Replace with your content -->
+        <div class="py-4">
+          <h1 class="text-green-400 text-xl">
+            Hypermedia Tool Online
+          </h1>
+        </div>
+        <!-- /End replace -->
+      </div>
+    </div>
+  |]
+
 dashboard :: Okapi Okapi.Result
 dashboard = do
   Okapi.get
   Okapi.seg "dashboard"
-  let
-    screen :: LBS.ByteString =
-      [Perl.q|
-        <div class="py-6">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>
-          </div>
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-            <!-- Replace with your content -->
-            <div class="py-4">
-              <div class="border-4 border-dashed border-gray-200 rounded-lg h-96">
-                <h1 class="text-green-400 text-xl">
-                  Hypermedia Tool Online
-                </h1>
-              </div>
-            </div>
-            <!-- /End replace -->
-          </div>
-        </div>
-      |]
-    in
-      Okapi.okHTML [] screen
+  Okapi.okHTML [] homeScreen
 
 templates :: Okapi Okapi.Result
 templates = do
@@ -346,13 +331,12 @@ templates = do
 templateScreen :: Okapi Okapi.Result
 templateScreen = do
   templateFilenames <- liftIO $ listDirectory "templates"
-  let
-    templateNames = map (takeWhile (/= '.')) templateFilenames
-    templateList :: LBS.ByteString =
-      foldl (<>) "" $
-        map
-          (\tn ->
-            [Perl.qc|
+  let templateNames = map (takeWhile (/= '.')) templateFilenames
+      templateList :: LBS.ByteString =
+        foldl (<>) "" $
+          map
+            ( \tn ->
+                [Perl.qc|
               <li id="{tn}-item">
                 <div class="px-4 py-4 sm:px-6 flex items-center justify-between">
                   <p class="text-lg font-medium text-indigo-600 truncate">{tn}</p>
@@ -367,10 +351,10 @@ templateScreen = do
                 </div>
               </li>
             |]
-          )
-          templateNames
-    screen :: LBS.ByteString =
-      [Perl.qq|
+            )
+            templateNames
+      screen :: LBS.ByteString =
+        [Perl.qq|
         <div class="py-6">
           <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <h1 class="text-2xl font-semibold text-gray-900">Templates</h1>
@@ -398,20 +382,14 @@ templateScreen = do
           </div>
         </div>
       |]
-    in
-      Okapi.okHTML [] screen
-
--- <button hx-get="/templates/create" hx-target="#screen">
---   Add New
--- </button>
+   in Okapi.okHTML [] screen
 
 database :: Okapi Okapi.Result
 database = do
   Okapi.get
   Okapi.seg "database"
-  let
-    screen :: LBS.ByteString =
-      [Perl.qc|
+  let screen :: LBS.ByteString =
+        [Perl.qc|
         <div class="py-6">
           <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <h1 class="text-2xl font-semibold text-gray-900">Database</h1>
@@ -419,16 +397,13 @@ database = do
           <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
             <!-- Replace with your content -->
             <div class="py-4">
-              <div class="border-4 border-dashed border-gray-200 rounded-lg h-96">
-                <div id="editor"></div>
-              </div>
+              <div id="editor"></div>
             </div>
             <!-- /End replace -->
           </div>
         </div>
       |]
-    in
-      Okapi.okHTML [] screen
+   in Okapi.okHTML [] screen
 
 editTemplate :: Okapi Okapi.Result
 editTemplate = do
@@ -437,9 +412,8 @@ editTemplate = do
   templateName <- Okapi.segParam
   templatePath <- liftIO $ makeRelativeToCurrentDirectory ("templates/" <> templateName <> ".mustache")
   template <- liftIO $ readFile templatePath
-  let
-    screen =
-      [Perl.qc|
+  let screen =
+        [Perl.qc|
         <div class="py-6">
           <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <h1 class="text-2xl font-semibold text-gray-900">Template Editor</h1>
@@ -447,15 +421,14 @@ editTemplate = do
           <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
             <!-- Replace with your content -->
             <div class="py-4">
-              <div class="border-4 border-dashed border-gray-200 rounded-lg h-96">
-                <form hx-put="/templates/{templateName}" hx-ext="json-enc" hx-params="*" hx-target="#screen">
-                  <label for="editFormContent" class="block text-lg font-medium text-gray-700">{templateName}</label>
-                  <textarea rows="4" name="editFormContent" id="editFormContent" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md">{template}</textarea>
-                  <button class="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                    Save
-                  </button>
-                </form>
-                <button hx-get="/templates" hx-target="#screen" type="button" class="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+              <p class="hidden" id="editor-content">{template}</p>
+              <div id="editor">
+              </div>
+              <div class="mt-4 flex items-center">
+                <button _="on click js return $editor.view.state.doc end then log it" class="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                  Save
+                </button>
+                <button hx-get="/templates" hx-target="#screen" type="button" class="ml-4 inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
                   Cancel
                 </button>
               </div>
@@ -464,7 +437,7 @@ editTemplate = do
           </div>
         </div>
       |]
-    in Okapi.okHTML [] screen
+   in Okapi.okHTML [] screen
 
 deleteTemplate :: Okapi Okapi.Result
 deleteTemplate = do
@@ -481,9 +454,8 @@ createTemplate = do
   Okapi.get
   Okapi.seg "templates"
   Okapi.seg "create"
-  let
-    screen =
-      [Perl.qc|
+  let screen =
+        [Perl.qc|
         <div class="py-6">
           <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <h1 class="text-2xl font-semibold text-gray-900">Add New Template</h1>
@@ -491,34 +463,32 @@ createTemplate = do
           <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
             <!-- Replace with your content -->
             <div class="py-4">
-              <div class="border-4 border-dashed border-gray-200 rounded-lg h-96">
-                <form hx-post="/templates" hx-ext="json-enc" hx-params="*" hx-target="#screen">
-                  <label for="newFormName" class="block text-lg font-medium text-gray-700">New Template Name</label>
-                  <input name="newFormName" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"></input>
-                  <label for="newFormContent" class="block text-lg font-medium text-gray-700">New Template Content</label>
-                  <textarea rows="4" name="newFormContent" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md">
-                  </textarea>
-                  <button class="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                    Create
-                  </button>
-                </form>
-                <button hx-get="/templates" hx-target="#screen" type="button" class="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                  Cancel
+              <form hx-post="/templates" hx-ext="json-enc" hx-params="*" hx-target="#screen">
+                <label for="newFormName" class="block text-lg font-medium text-gray-700">New Template Name</label>
+                <input name="newFormName" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"></input>
+                <label for="newFormContent" class="block text-lg font-medium text-gray-700">New Template Content</label>
+                <textarea rows="4" name="newFormContent" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md">
+                </textarea>
+                <button class="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                  Create
                 </button>
-              </div>
+              </form>
+              <button hx-get="/templates" hx-target="#screen" type="button" class="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                Cancel
+              </button>
             </div>
             <!-- /End replace -->
           </div>
         </div>
       |]
-    in Okapi.okHTML [] screen
+   in Okapi.okHTML [] screen
 
 save :: Okapi Okapi.Result
 save = do
   Okapi.put
   Okapi.seg "templates"
   templateName <- Okapi.segParam
-  EditForm{..} <- Okapi.bodyJSON @EditForm
+  EditForm {..} <- Okapi.bodyJSON @EditForm
   liftIO $ do
     templatePath <- makeRelativeToCurrentDirectory $ "templates/" <> templateName <> ".mustache"
     writeFile templatePath editFormContent
@@ -528,7 +498,7 @@ create :: Okapi Okapi.Result
 create = do
   Okapi.post
   Okapi.seg "templates"
-  NewForm{..} <- Okapi.bodyJSON @NewForm
+  NewForm {..} <- Okapi.bodyJSON @NewForm
   liftIO $ do
     templatePath <- liftIO $ makeRelativeToCurrentDirectory . T.unpack $ "templates/" <> newFormName <> ".mustache"
     fd <- liftIO $ Posix.createFile templatePath Posix.stdFileMode
@@ -538,37 +508,11 @@ create = do
 
 data EditForm = EditForm
   { editFormContent :: Text
-  } deriving (Eq, Show, Generic, FromJSON)
+  }
+  deriving (Eq, Show, Generic, FromJSON)
 
 data NewForm = NewForm
-  { newFormName :: Text
-  , newFormContent :: Text
-  } deriving (Eq, Show, Generic, FromJSON)
-
-{-
-templateByName :: Okapi Okapi.Result
-templateByName = do
-  Okapi.get
-  Okapi.seg "templates"
-  templateName <- Okapi.queryParam @FilePath "name"
-  templatePath <- liftIO $ makeRelativeToCurrentDirectory ("templates/" <> templateName <> ".mustache")
-  fileExists <- liftIO $ doesFileExist templatePath
-  content <-
-    if fileExists
-      then do
-        liftIO $ readFile templatePath
-      else do
-        pure ""
-  Okapi.okLucid [] $ do
-    input_
-      [ id_ "template-name-input"
-      , name_ "templateName"
-      , value_ $ pack templateName
-      ]
-    textarea_
-      [ id_ "template-content-input"
-      , name_ "templateContent"
-      , hxSwapOob_ "true"
-      ]
-      $ toHtml content
--}
+  { newFormName :: Text,
+    newFormContent :: Text
+  }
+  deriving (Eq, Show, Generic, FromJSON)

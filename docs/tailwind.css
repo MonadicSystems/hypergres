@@ -1,0 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Palette+Mosaic&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* h1 {
+    @apply font-fancy;
+    font-weight: 400 !important;
+    font-size: 3rem !important;
+} */

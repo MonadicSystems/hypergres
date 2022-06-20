@@ -1,0 +1,231 @@
+# Introduction
+
+Hypergres turns any Postgres database into a hypermedia API.
+
+## How it Works
+
+Given a Postgres database, PostgREST will generate a REST API on top of it based on the tables, views, procedures, etc. stored in the database.
+URLs for running select, insert, update, delete statements and invoking stored procedures are automatically generated.
+Normally, the results of these queries are returned as JSON. For example, hitting this endpoint:
+
+```
+GET /films?select=title,directors(id,last_name) HTTP/1.1
+```
+
+returns:
+
+```javascript
+[
+  { "title": "Workers Leaving The Lumière Factory In Lyon",
+    "directors": {
+      "id": 2,
+      "last_name": "Lumière"
+    }
+  },
+  { "title": "The Dickson Experimental Sound Film",
+    "directors": {
+      "id": 1,
+      "last_name": "Dickson"
+    }
+  },
+  { "title": "The Haunted Castle",
+    "directors": {
+      "id": 3,
+      "last_name": "Méliès"
+    }
+  }
+]
+```
+
+Hypergres allows you to return query result as HTML instead by setting the `Accept` header to `text/html;template=<template_name>`.
+This tells Hypergres to take the JSON result of the query and pass it to the template with the specified name.
+For example, let's say we had a template named `filmListView` that looked like this:
+
+```html
+<ul>
+    <li>
+    {{
+        let render =
+                \film ->
+                    '''
+                    <li>
+                        <h1>Title - {{ film.title }}</h1>
+                        <p>Directed by - {{ film.directors.last_name }}</p>
+                    </li>
+                    '''
+        in for . render
+    }}
+    </li>
+</ul>
+```
+
+Templates are pure functions from JSON to HTML. The result of the template is returned to the client.
+
+This is really useful when used with [htmx](); an extension of HTML that allows ...
+
+Thanks to htmx, we can extend the above example to link to details about the director and have the results of the endpoint swapped into the DOM.
+
+```html
+<ul>
+    <li>
+    {{
+        let render =
+                \film ->
+                    '''
+                    <li>
+                        <h1>Title - {{ film.title }}</h1>
+                        <p>
+                            Directed by -
+                                <a hx-get="/directors?select=first_name,last_name&id=eq.{{ film.directors.id }}"
+                                   hx-headers="{ 'Accept': 'text/html;template=directorDetail'}"
+                                >
+                                    {{ film.directors.last_name }}
+                                </a>
+                        </p>
+                    </li>
+                    '''
+        in for . render
+    }}
+    </li>
+</ul>
+```
+
+Each last name in the list of directors is now a hyperlink to more information about that director.
+
+To learn how Hypergres works first read the PostgREST documentation.
+Hypergres does everything PostgREST does plus some other features that make it useful as a hypermedia API.
+These include:
+
+- The ability to request HTML instead of JSON
+- A templating language to transform SQL query results into HTML
+- Editors for creating HTML templates and SQL queries
+- A basic file system for images, scripts, CSS, etc.
+
+## Hypergres Templating Language
+
+JSON is turned into HTML using the Hypergres Templating Language. It is basically a purely functional version of the Go templating language.
+All templates take a single god object `.` as an argument.
+The `.` value contains the results of the SQL query after it has been transformed into JSON by PostgREST, and the request's headers.
+The type of `.` is unknown and depends on the result of the query.
+We only know that `.` will have a `headers` field representing the request's headers. It may be empty.
+
+All expressions are enclosed in `{{<expression>}}` braces.
+
+```html
+<p>Name: {{ .first_name <> " " <> .last_name }}</p>
+<p>Salary: {{ .salary }}</p>
+<p>Tax: {{ .salary * 0.08 }}</p>
+```
+
+You have access to all the basic arithmetic operators, string helpers, list utilites, etc.
+
+Here's a conditional:
+
+```html
+<p>Name: {{ .first_name <> " " <> .last_name }}</p>
+<p>Salary: {{ .salary }}</p>
+<p>Tax: {{ .salary * 0.08 }}</p>
+{{
+    if .salary > 1000000
+    then "<h1>You're a millionaire!!</h1>"
+    else "<h1>You're not a millionaire.</h1>"
+}}
+```
+
+Looping can be done with `for`, which is just `map` with the arguments in reverse position:
+
+```html
+<ul>
+    {{
+        for .students (\s -> 
+            '''
+            <li>
+                <h1>Name: {{(firstLetterOf s.first_name) <> ". " <> s.last_name}}</h1>
+                <p>Grade: {{s.letter_grade}}</p>
+            </li>
+            '''
+        )
+    }}
+</ul>
+```
+
+Feeding the following JSON data:
+
+```javascript
+{
+    "students": [
+        { "first_name": "Alice"
+        , "last_name": "Givens"
+        , "letter_grade": "A-"
+        },
+        { "first_name": "Bob"
+        , "last_name": "Stevens"
+        , "letter_grade": "B+"
+        },
+        { "first_name": "Derek"
+        , "last_name": "Smith"
+        , "letter_grade": "D"
+        }
+    ]
+}
+```
+
+into the template defined above generates the following HTML:
+
+```html
+<ul>
+    <li>
+        <h1>Name: A. Givens</h1>
+        <p>Grade: A-</p>
+    </li>
+    <li>
+        <h1>Name: B. Stevens</h1>
+        <p>Grade: B+</p>
+    </li>
+    <li>
+        <h1>Name: D. Smith</h1>
+        <p>Grade: D</p>
+    </li>
+</ul>
+```
+
+Templates are stored in the database in the `templates` table and can be queried and modified just like any other table.
+
+## Hypergres Template Editor
+
+To make the authoring of Hypergres templates easier, Hypergres provides an editor that is aware of your
+databases' structure and available templates. The editor helps by providing suggestions for URLs when the
+developer uses `hx-get`, `hx-post`, etc. attributes. When using `hx-post` for insert queries or invoking stored procedures,
+the editor will look for values in the DOM that will be sent with the request and ensure that they match up with the argument type
+of the query. There should be a query builder. Hyperscript should be supported.
+You should be able to turn complex queries into views so you don't get long URLs that clutter up you HTML.
+The editor will also suggest templates that match the type of your queries.
+If none are available, the editor will suggest you create a new one.
+
+The Hypergres Template Editor makes creating Hypermedia-Driven apps a smoother experience.
+
+## Internet of Code
+
+You can link to valid HTL code using URLs. URLs are replaced with the expression that they link to and
+are typechecked and executed just like any ol' HTL expression. For example; let's say we have the following template
+hosted at https://xyz.com/itemView:
+
+```html
+<li>
+    <p>Item Name: {{.item_name}}</p>
+    <p>Price: ${{let markup = 0.1 in dollarFormat (.item_wholesale_price * markup + .item_wholesale_price)}}</p>
+</li>
+```
+
+You could call the template defined from another template like so:
+
+```html
+<ul>
+    {{ for .items https://xyz.com/itemView }}
+</ul>
+```
+
+This will render the item view for each item in items.
+
+You can link to templates in your own database.
+Should detect if URL is internal to make optimizations.

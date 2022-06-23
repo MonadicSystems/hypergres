@@ -2,10 +2,19 @@
 
 Hypergres turns any Postgres database into a hypermedia API.
 
+## Installation
+
+Hypergres is available as an executable.
+
+1. Download it
+2. Install it on your path
+3. Make sure you set up Postgres with this [script]()
+4. Run `hypergres ./hypergres.conf`
+
 ## How it Works
 
-Given a Postgres database, PostgREST will generate a REST API on top of it based on the tables, views, procedures, etc. stored in the database.
-URLs for running select, insert, update, delete statements and invoking stored procedures are automatically generated.
+Given a Postgres database, Hypergres will generate a REST API on top of it based on the tables, views, procedures, etc. stored in the database.
+URLs for executing select, insert, update, delete statements and invoking stored procedures are automatically generated.
 Normally, the results of these queries are returned as JSON. For example, hitting this endpoint:
 
 ```
@@ -37,7 +46,57 @@ returns:
 ]
 ```
 
-Hypergres allows you to return query result as HTML instead by setting the `Accept` header to `text/html;template=<template_name>`.
+Hypergres allows you to return query results as HTML instead by setting the `Accept` header to `text/html;template=<template_name>`,
+where `<template_name>` is the name of a template file stored in the table `hypergres_templates`.
+
+The Hypergres UI itself is built with the templates stored in this table.
+You need to run a script to populate your database with these templates or create your own.
+
+## The Static Table
+
+This table is for static files like pure HTML, images, videos, etc.
+It's the `hypergres_static` table. It has two columns.
+`name`, `extension`, and `contents`.
+
+Hits to `/static/<file_name>.<file_extension>` will use the `hypergres_static` table and select the file contents by name and extension.
+
+## The Templates Table
+
+All templates used by Hypergres are stored in the `hypergres_templates` table.
+Has the columns `name` and `template`. Just mustache for now, but could use consolidate.js
+in the future for multiple template languages.
+
+You either need to create them yourself or use the given script to populate these tables with the following templates:
+
+- `hypergres_root` (MOST IMPORTANT)
+
+    The starting point of the hypergres UI.
+    Basic dashboard with meta information about the database.
+
+- `hypergres_template` (MOST IMPORTANT)
+
+    UI for seeing, editing, and creating templates.
+
+- `hypergres_table` (MOST IMPORTANT)
+
+    A template for presenting the meta data of a table.
+    Column names, column types, rows. Table information like policies, roles, etc.
+
+- `hypergres_role`
+
+    A template for presenting the meta data of a role.
+    What users are a part, permissions, access they have, etc.
+
+- `hypergres_function`
+
+    A template for presenting the meta data of a function.
+    Return type, arguments and their type, URL to call invoke function.
+
+- `hypergres_type`
+
+    A template for presenting the meta data of a type.
+    Casts, name, constraints, etc.
+
 This tells Hypergres to take the JSON result of the query and pass it to the template with the specified name.
 For example, let's say we had a template named `filmListView` that looked like this:
 
@@ -100,6 +159,10 @@ These include:
 - A templating language to transform SQL query results into HTML
 - Editors for creating HTML templates and SQL queries
 - A basic file system for images, scripts, CSS, etc.
+
+## Hypergres Template Editor
+
+
 
 ## Hypergres Templating Language
 

@@ -181,6 +181,9 @@ asJsonSingleF returnsScalar
 asXmlF :: FieldName -> SqlFragment
 asXmlF fieldName = "coalesce(xmlagg(_postgrest_t." <> pgFmtIdent fieldName <> "), '')"
 
+asHtmlF :: SqlFragment
+asHtmlF = undefined
+
 asBinaryF :: FieldName -> SqlFragment
 asBinaryF fieldName = "coalesce(string_agg(_postgrest_t." <> pgFmtIdent fieldName <> ", ''), '')"
 
